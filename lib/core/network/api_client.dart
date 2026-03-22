@@ -1,42 +1,98 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../constants/urls.dart';
+import 'package:chatbot/core/constants/urls.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../logger/app_logger.dart';
 
+final dioProvider = Provider<Dio>((ref) {
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: ApiUrls.baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+      queryParameters: {
+        'key': ApiUrls.apiKey, // automatically attach API key to every request
+      },
+    ),
+  );
+
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        if (kDebugMode) {
+          AppLogger.logRequest(options.uri.toString(), options.data);
+        }
+        return handler.next(options);
+      },
+      onResponse: (response, handler) {
+        if (kDebugMode) {
+          AppLogger.logResponse(response.requestOptions.uri.toString(), response.data);
+        }
+        return handler.next(response);
+      },
+      onError: (err, handler) {
+        if (kDebugMode) {
+          AppLogger.logError(err.requestOptions.uri.toString(), err.message);
+        }
+        return handler.next(err);
+      },
+    ),
+  );
+
+  return dio;
+});
+
 class ApiClient {
-  final http.Client client;
+  final Dio _dio;
 
-  ApiClient(this.client);
+  ApiClient(this._dio);
 
+  /// POST request with optional headers
   Future<Map<String, dynamic>> post({
     required String endpoint,
     required Map<String, dynamic> body,
+    Map<String, String>? headers,
   }) async {
-    final url = Uri.parse("${ApiUrls.baseUrl}$endpoint?key=${ApiUrls.apiKey}");
-
     try {
-      AppLogger.logRequest(url.toString(), body);
-
-      final response = await client.post(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode(body),
+      final response = await _dio.post(
+        endpoint,
+        data: body,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            if (headers != null) ...headers,
+          },
+        ),
       );
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception(e.response?.data ?? e.message);
+    }
+  }
 
-      final decoded = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        AppLogger.logResponse(url.toString(), decoded);
-        return decoded;
-      } else {
-        AppLogger.logError(url.toString(), decoded);
-        throw Exception(decoded.toString());
-      }
-    } catch (e) {
-      AppLogger.logError(url.toString(), e);
-      rethrow;
+  /// GET request with optional headers
+  Future<Map<String, dynamic>> get({
+    required String endpoint,
+    Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.get(
+        endpoint,
+        queryParameters: queryParameters,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            if (headers != null) ...headers,
+          },
+        ),
+      );
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception(e.response?.data ?? e.message);
     }
   }
 }
+
+final apiClientProvider = Provider((ref) => ApiClient(ref.watch(dioProvider)));
