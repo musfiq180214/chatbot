@@ -33,3 +33,6 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+/*
+*  We are ignoring secret keys from github
+* */
