@@ -1,4 +1,6 @@
+import 'package:chatbot/core/logger/app_logger.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/services/hive_service.dart';
@@ -6,6 +8,12 @@ import 'features/chat/presentation/chat_screen.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: "assets/env");
+    debugPrint("OpenAI API Key Loaded: ${dotenv.env['OPENAI_API_KEY']}");
+  } catch (e) {
+    debugPrint("Error loading env file: $e");
+  }
   await HiveService.init();
   runApp(const ProviderScope(child: MyApp()));
 }

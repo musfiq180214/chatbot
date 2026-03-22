@@ -1,3 +1,5 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class ApiUrls {
   static const String baseUrl =
       "https://generativelanguage.googleapis.com/v1beta";
@@ -5,5 +7,6 @@ class ApiUrls {
   static const String geminiEndpoint =
       "/models/gemini-3-flash-preview:generateContent";
 
-  static const String apiKey = "AIzaSyDsJyLH02SRAxnu5DlMLptz8k7iwSowBig";
+  static final String? apiKey = dotenv.env['OPENAI_API_KEY'];
+
 }
