@@ -17,7 +17,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messages = ref.watch(chatProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("AI Chat")),
+      appBar: AppBar(
+        title: const Text("AI Chat"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () async {
+              final confirm = await showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text("Clear Chat"),
+                  content: const Text("Are you sure you want to delete all chats?"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("Yes"),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                ref.read(chatProvider.notifier).clearChats();
+              }
+            },
+          )
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
