@@ -1,7 +1,6 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod/src/framework.dart';
 import '../provider/chat_provider.dart';
 import '../model/chat_messege.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -18,6 +17,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   final TextEditingController controller = TextEditingController();
   final ScrollController scrollController = ScrollController();
   bool isTyping = false;
+
+  final List<String> availableModels = [
+    "openai/gpt-4o-mini",
+    "openai/gpt-4o",
+    "openai/gpt-3.5-turbo",
+  ];
 
   void scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -42,7 +47,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isUser) CircleAvatar(child: Icon(avatar)),
           const SizedBox(width: 8),
@@ -67,9 +74,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
-                  p: TextStyle(
-                    color: Colors.black87,
-                  ),
+                  p: TextStyle(color: Colors.black87),
                   listBullet: TextStyle(color: Colors.black87),
                 ),
               ),
@@ -110,6 +115,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    final selectedModel = ref.watch(selectedModelProvider);
     final messages = ref.watch(chatProvider);
 
     // Scroll to bottom after messages update
@@ -119,6 +125,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       appBar: AppBar(
         title: const Text("AI Chat"),
         actions: [
+          // 🔥 Model selection dropdown
+          DropdownButton<String>(
+            value: availableModels.contains(selectedModel)
+                ? selectedModel
+                : null,
+            dropdownColor: Colors.white,
+            underline: const SizedBox(),
+            icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
+            items: availableModels.map((model) {
+              return DropdownMenuItem(
+                value: model,
+                child: Text(model, style: const TextStyle(color: Colors.black)),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(selectedModelProvider.notifier).setModel(value);
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
@@ -126,8 +152,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 context: context,
                 builder: (_) => AlertDialog(
                   title: const Text("Clear Chat"),
-                  content:
-                  const Text("Are you sure you want to delete all chats?"),
+                  content: const Text(
+                    "Are you sure you want to delete all chats?",
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
@@ -140,12 +167,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   ],
                 ),
               );
-
               if (confirm == true) {
                 ref.read(chatProvider.notifier).clearChats();
               }
             },
-          )
+          ),
         ],
       ),
       body: Padding(
@@ -158,8 +184,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 itemCount: messages.length + (isTyping ? 1 : 0),
                 itemBuilder: (_, index) {
                   if (index >= messages.length) return typingIndicator();
-                  final msg = messages[index];
-                  return buildMessage(msg);
+                  return buildMessage(messages[index]);
                 },
               ),
             ),
@@ -177,7 +202,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   icon: const Icon(Icons.send),
                   onPressed: () async {
                     final text = controller.text.trim();
-                    if (text.isEmpty) return;
+                    if (text.isEmpty || isTyping) return;
 
                     controller.clear();
                     setState(() => isTyping = true);
@@ -207,7 +232,6 @@ class _DotIndicatorState extends State<DotIndicator>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-
 
   @override
   void initState() {

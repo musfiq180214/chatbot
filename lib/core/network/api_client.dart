@@ -11,8 +11,9 @@ final dioProvider = Provider<Dio>((ref) {
       baseUrl: ApiUrls.baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
-      queryParameters: {
-        'key': ApiUrls.apiKey, // automatically attach API key to every request
+      headers: {
+        'Authorization': 'Bearer ${ApiUrls.apiKey}',
+        'Content-Type': 'application/json',
       },
     ),
   );
