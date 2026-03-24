@@ -47,7 +47,7 @@ android {
             dimension = "app"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            resValue("string", "app_name", "Chatbot Delivery Staging")
+            resValue("string", "app_name", "Chatbot Staging")
         }
         create("production") {
             dimension = "app"
