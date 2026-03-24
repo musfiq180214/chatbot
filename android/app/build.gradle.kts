@@ -1,3 +1,13 @@
+project.afterEvaluate {
+    tasks.filter { it.name.startsWith("compileFlutterBuild") }.forEach { task ->
+        val flavor = task.name.substringAfter("compileFlutterBuild").lowercase()
+        if (flavor.contains("staging")) {
+            (task as? com.flutter.gradle.tasks.FlutterTask)?.let { it.targetPath = "lib/main_staging.dart" }
+        } else if (flavor.contains("production")) {
+            (task as? com.flutter.gradle.tasks.FlutterTask)?.let { it.targetPath = "lib/main_production.dart" }
+        }
+    }
+}
 plugins {
     id("com.android.application")
     id("kotlin-android")

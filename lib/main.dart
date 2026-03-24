@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/services/hive_service.dart';
 import 'features/chat/presentation/chat_screen.dart';
 
-void main() async{
+void chatbot() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await dotenv.load(fileName: "assets/env");
