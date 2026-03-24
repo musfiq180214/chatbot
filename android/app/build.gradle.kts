@@ -39,6 +39,21 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+    
+    flavorDimensions.add("app")
+
+    productFlavors {
+        create("staging") {
+            dimension = "app"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "Chatbot Delivery Staging")
+        }
+        create("production") {
+            dimension = "app"
+            resValue("string", "app_name", "Chatbot")
+        }
+    }
 
     buildTypes {
         release {
