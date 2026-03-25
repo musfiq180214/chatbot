@@ -22,13 +22,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   late final AnimationController fabAnimationController;
   late final Animation<double> fabAnimation;
 
-  // Store GlobalKeys for each message to measure its height
   final Map<int, GlobalKey> messageKeys = {};
 
   final List<String> availableModels = [
     "openai/gpt-4o-mini",
     "openai/gpt-4o",
     "openai/gpt-3.5-turbo",
+    "google/gemini-1.5-flash",
   ];
 
   late stt.SpeechToText speech;
@@ -37,10 +37,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   @override
   void initState() {
     super.initState();
-
     speech = stt.SpeechToText();
 
-    // FAB fade animation
     fabAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -50,14 +48,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       curve: Curves.easeInOut,
     );
 
-    // Scroll to bottom initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
       scrollToBottom(animated: false);
     });
 
     scrollController.addListener(() {
       if (!scrollController.hasClients) return;
-
       final nearBottom = isNearBottom;
       if (!nearBottom) {
         if (!showScrollToBottom) {
@@ -73,37 +69,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
   }
 
+// Dynamic theme based on selected model
+  Color _getModelColor(String model) {
+    if (model.contains('4o-mini')) {
+      return const Color(0xFF536DFE); // OpenAI Green
+    }
+    if (model.contains('4o')) {
+      return const Color(0xFF8BC34A); // GPT-4o Lime
+    }
+    if (model.contains('3.5')) {
+      return const Color(0xFF039BE5); // GPT-3.5 Blue
+    }
+    if (model.contains('1.5')) {
+      return const Color(0xFFBCAAA4); // Gemini Teal
+    }
+
+    // Default fallback color to prevent the null error
+    return Colors.deepPurpleAccent;
+  }
+
   Future<void> toggleListening() async {
     if (!isListening) {
-      bool available = await speech.initialize(
-        onStatus: (status) => print("STATUS: $status"),
-        onError: (error) => print("ERROR: $error"),
-      );
-
+      bool available = await speech.initialize();
       if (available) {
         setState(() => isListening = true);
-
-        speech.listen(
-          onResult: (result) {
-            print("WORDS: ${result.recognizedWords}");
-
-            setState(() {
-              controller.text = result.recognizedWords;
-              controller.selection = TextSelection.fromPosition(
-                TextPosition(offset: controller.text.length),
-              );
-            });
-          },
-          listenOptions: stt.SpeechListenOptions(
-            partialResults: true, // ✅ NEW WAY
-            listenMode: stt.ListenMode.dictation,
-            cancelOnError: true,
-          ),
-          localeId: "en_US",
-          onSoundLevelChange: (level) {
-            print("SOUND LEVEL: $level");
-          },
-        );
+        speech.listen(onResult: (result) {
+          setState(() {
+            controller.text = result.recognizedWords;
+            controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: controller.text.length));
+          });
+        });
       }
     } else {
       setState(() => isListening = false);
@@ -117,30 +113,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         scrollController.position.maxScrollExtent - 50;
   }
 
-  // Scroll to the end of the last message dynamically
   void scrollToBottom({bool animated = false}) {
     if (!scrollController.hasClients || messageKeys.isEmpty) return;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final lastIndex = messageKeys.keys.isNotEmpty
           ? messageKeys.keys.last
           : null;
       if (lastIndex == null) return;
-
       final key = messageKeys[lastIndex];
       if (key != null && key.currentContext != null) {
         final renderBox = key.currentContext!.findRenderObject() as RenderBox;
-        final messageHeight = renderBox.size.height;
-
-        final target =
-            scrollController.position.maxScrollExtent + messageHeight;
-
+        final target = scrollController.position.maxScrollExtent +
+            renderBox.size.height;
         if (animated) {
-          scrollController.animateTo(
-            target,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
+          scrollController.animateTo(target,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut);
         } else {
           scrollController.jumpTo(target);
         }
@@ -148,80 +136,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
   }
 
-  Widget buildMessage(ChatMessage msg, int index) {
+  Widget buildMessage(ChatMessage msg, int index, Color themeColor) {
     final key = messageKeys[index] ??= GlobalKey();
     final isUser = msg.isUser;
-    final avatar = isUser ? Icons.person : Icons.smart_toy;
     final cleanText = msg.text.replaceAll(RegExp(r'\n?\*{3,}\n?'), '\n\n');
 
     return Padding(
       key: key,
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment
+            .start,
         children: [
-          if (!isUser) CircleAvatar(child: Icon(avatar)),
+          if (!isUser)
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: themeColor.withOpacity(0.1),
+              child: Icon(Icons.auto_awesome, color: themeColor, size: 18),
+            ),
           const SizedBox(width: 8),
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isUser ? Colors.blue : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
-                ],
+                color: isUser ? themeColor : Colors.grey.shade100,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isUser ? 16 : 0),
+                  bottomRight: Radius.circular(isUser ? 0 : 16),
+                ),
               ),
               child: MarkdownBody(
                 data: cleanText,
                 styleSheet: MarkdownStyleSheet(
-                  h3: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  p: const TextStyle(color: Colors.black87),
-                  listBullet: const TextStyle(color: Colors.black87),
+                  p: TextStyle(color: isUser ? Colors.white : Colors.black87,
+                      fontSize: 15),
+                  code: TextStyle(
+                      backgroundColor: isUser ? Colors.black26 : Colors.grey
+                          .shade300),
                 ),
               ),
             ),
           ),
           if (isUser) const SizedBox(width: 8),
-          if (isUser) CircleAvatar(child: Icon(avatar)),
+          if (isUser)
+            const CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.blueGrey,
+              child: Icon(Icons.person, color: Colors.white, size: 18),
+            ),
         ],
       ),
-    );
-  }
-
-  Widget typingIndicator() {
-    return Row(
-      children: [
-        const CircleAvatar(child: Icon(Icons.smart_toy)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              DotIndicator(),
-              SizedBox(width: 2),
-              DotIndicator(),
-              SizedBox(width: 2),
-              DotIndicator(),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -229,138 +196,160 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   Widget build(BuildContext context) {
     final selectedModel = ref.watch(selectedModelProvider);
     final messages = ref.watch(chatProvider);
-
-    // Auto-scroll for new messages
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isNearBottom) scrollToBottom(animated: true);
-    });
+    final themeColor = _getModelColor(selectedModel);
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("AI Chat"),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("AI Assistant", style: TextStyle(color: Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.bold)),
+            Text(selectedModel,
+                style: TextStyle(color: themeColor, fontSize: 11)),
+          ],
+        ),
         actions: [
           DropdownButton<String>(
             value: availableModels.contains(selectedModel)
                 ? selectedModel
                 : null,
-            dropdownColor: Colors.white,
             underline: const SizedBox(),
-            icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
+            icon: Icon(Icons.settings_input_component, color: themeColor),
             items: availableModels.map((model) {
               return DropdownMenuItem(
                 value: model,
-                child: Text(model, style: const TextStyle(color: Colors.black)),
+                child: Text(model, style: const TextStyle(fontSize: 13)),
               );
             }).toList(),
             onChanged: (value) {
-              if (value != null) {
-                ref.read(selectedModelProvider.notifier).setModel(value);
-              }
+              if (value != null) ref
+                  .read(selectedModelProvider.notifier)
+                  .setModel(value);
             },
           ),
           IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () async {
-              final confirm = await showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text("Clear Chat"),
-                  content: const Text(
-                    "Are you sure you want to delete all chats?",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("Cancel"),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text("Yes"),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                ref.read(chatProvider.notifier).clearChats();
-              }
-            },
+            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.grey),
+            onPressed: _showClearDialog,
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: messages.length + (isTyping ? 1 : 0),
-                itemBuilder: (_, index) {
-                  if (index >= messages.length) return typingIndicator();
-                  return buildMessage(messages[index], index);
-                },
-              ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: messages.length + (isTyping ? 1 : 0),
+              itemBuilder: (_, index) {
+                if (index >= messages.length)
+                  return _typingIndicator(themeColor);
+                return buildMessage(messages[index], index, themeColor);
+              },
             ),
-            Row(
-              children: [
-                // 🎤 Microphone Button
-                IconButton(
-                  icon: Icon(
-                    isListening ? Icons.mic : Icons.mic_none,
-                    color: isListening ? Colors.red : Colors.grey,
-                  ),
-                  onPressed: toggleListening,
-                ),
-
-                // 📝 Text Input
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    decoration: InputDecoration(
-                      hintText: isListening
-                          ? "Listening..."
-                          : "Type a message...",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 4),
-
-                // 📤 Send Button
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () async {
-                    final text = controller.text.trim();
-                    if (text.isEmpty || isTyping) return;
-
-                    controller.clear();
-                    setState(() => isTyping = true);
-
-                    await ref.read(chatProvider.notifier).sendMessage(text);
-
-                    setState(() => isTyping = false);
-                    scrollToBottom(animated: true);
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          _buildInputSection(themeColor),
+        ],
       ),
       floatingActionButton: FadeTransition(
         opacity: fabAnimation,
         child: showScrollToBottom
-            ? FloatingActionButton(
-                onPressed: () => scrollToBottom(animated: true),
-                child: const Icon(Icons.arrow_downward),
-              )
+            ? FloatingActionButton.small(
+          backgroundColor: themeColor,
+          onPressed: () => scrollToBottom(animated: true),
+          child: const Icon(Icons.arrow_downward, color: Colors.white),
+        )
             : null,
+      ),
+    );
+  }
+
+  void _showClearDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) =>
+          AlertDialog(
+            title: const Text("Clear Chat?"),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false),
+                  child: const Text("Cancel")),
+              TextButton(onPressed: () => Navigator.pop(context, true),
+                  child: const Text(
+                      "Clear", style: TextStyle(color: Colors.red))),
+            ],
+          ),
+    );
+    if (confirm == true) ref.read(chatProvider.notifier).clearChats();
+  }
+
+  Widget _buildInputSection(Color themeColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(isListening ? Icons.mic : Icons.mic_none,
+                  color: isListening ? Colors.red : themeColor),
+              onPressed: toggleListening,
+            ),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                maxLines: null,
+                decoration: InputDecoration(
+                  hintText: isListening ? "Listening..." : "Message...",
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            CircleAvatar(
+              backgroundColor: themeColor,
+              child: IconButton(
+                icon: const Icon(
+                    Icons.send_rounded, color: Colors.white, size: 20),
+                onPressed: () async {
+                  final text = controller.text.trim();
+                  if (text.isEmpty || isTyping) return;
+                  controller.clear();
+                  setState(() => isTyping = true);
+                  await ref.read(chatProvider.notifier).sendMessage(text);
+                  setState(() => isTyping = false);
+                  scrollToBottom(animated: true);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typingIndicator(Color color) {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Row(
+        children: [
+          DotIndicator(color: color),
+          const SizedBox(width: 4),
+          DotIndicator(color: color),
+          const SizedBox(width: 4),
+          DotIndicator(color: color),
+        ],
       ),
     );
   }
@@ -375,9 +364,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 }
 
 class DotIndicator extends StatefulWidget {
-  const DotIndicator({super.key});
+  final Color color;
+
+  const DotIndicator({super.key, required this.color});
+
   @override
-  _DotIndicatorState createState() => _DotIndicatorState();
+  State<DotIndicator> createState() => _DotIndicatorState();
 }
 
 class _DotIndicatorState extends State<DotIndicator>
@@ -389,10 +381,8 @@ class _DotIndicatorState extends State<DotIndicator>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..repeat(reverse: true);
-
+        vsync: this, duration: const Duration(milliseconds: 600))
+      ..repeat(reverse: true);
     _animation = Tween<double>(begin: 0.3, end: 1.0).animate(_controller);
   }
 
@@ -401,12 +391,10 @@ class _DotIndicatorState extends State<DotIndicator>
     return FadeTransition(
       opacity: _animation,
       child: Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: Colors.grey,
-          shape: BoxShape.circle,
-        ),
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.6), shape: BoxShape.circle),
       ),
     );
   }
