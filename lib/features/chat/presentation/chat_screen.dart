@@ -4,6 +4,7 @@ import '../provider/chat_provider.dart';
 import '../model/chat_messege.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_animate/flutter_animate.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -48,14 +49,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       curve: Curves.easeInOut,
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {    // First attempt
       scrollToBottom(animated: false);
-    });
 
+      // Second attempt after a tiny delay to ensure layout is fully calculated
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) scrollToBottom(animated: false);
+      });
+    });
     scrollController.addListener(() {
       if (!scrollController.hasClients) return;
-      final nearBottom = isNearBottom;
-      if (!nearBottom) {
+
+      // Logic: If user is more than 100 pixels away from the bottom, show the FAB
+      final bool isAtBottom = scrollController.offset >=
+          scrollController.position.maxScrollExtent - 100;
+
+      if (!isAtBottom) {
         if (!showScrollToBottom) {
           setState(() => showScrollToBottom = true);
           fabAnimationController.forward();
@@ -114,26 +123,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   }
 
   void scrollToBottom({bool animated = false}) {
-    if (!scrollController.hasClients || messageKeys.isEmpty) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final lastIndex = messageKeys.keys.isNotEmpty
-          ? messageKeys.keys.last
-          : null;
-      if (lastIndex == null) return;
-      final key = messageKeys[lastIndex];
-      if (key != null && key.currentContext != null) {
-        final renderBox = key.currentContext!.findRenderObject() as RenderBox;
-        final target = scrollController.position.maxScrollExtent +
-            renderBox.size.height;
-        if (animated) {
-          scrollController.animateTo(target,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut);
-        } else {
-          scrollController.jumpTo(target);
-        }
-      }
-    });
+    if (!scrollController.hasClients) return;
+
+    final double offset = scrollController.position.maxScrollExtent;
+
+    if (animated) {
+      scrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } else {
+      // jumpTo is better for initial startup to avoid "flicker"
+      scrollController.jumpTo(offset);
+    }
   }
 
   Widget buildMessage(ChatMessage msg, int index, Color themeColor) {
@@ -146,16 +149,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment
-            .start,
+        mainAxisAlignment:
+        isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isUser)
             CircleAvatar(
               radius: 16,
               backgroundColor: themeColor.withOpacity(0.1),
               child: Icon(Icons.auto_awesome, color: themeColor, size: 18),
-            ),
+            )
+                .animate()
+                .fadeIn(duration: 250.ms)
+                .scale(begin: const Offset(0.8, 0.8)),
+
           const SizedBox(width: 8),
+
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -171,29 +179,56 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               child: MarkdownBody(
                 data: cleanText,
                 styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(color: isUser ? Colors.white : Colors.black87,
-                      fontSize: 15),
+                  p: TextStyle(
+                    color: isUser ? Colors.white : Colors.black87,
+                    fontSize: 15,
+                  ),
                   code: TextStyle(
-                      backgroundColor: isUser ? Colors.black26 : Colors.grey
-                          .shade300),
+                    backgroundColor:
+                    isUser ? Colors.black26 : Colors.grey.shade300,
+                  ),
                 ),
               ),
-            ),
+            )
+                .animate()
+                .fadeIn(duration: 300.ms)
+                .slideX(begin: isUser ? 0.25 : -0.25, curve: Curves.easeOut)
+                .scale(begin: const Offset(0.95, 0.95)),
           ),
+
           if (isUser) const SizedBox(width: 8),
+
           if (isUser)
             const CircleAvatar(
               radius: 16,
               backgroundColor: Colors.blueGrey,
               child: Icon(Icons.person, color: Colors.white, size: 18),
-            ),
+            )
+                .animate()
+                .fadeIn(duration: 250.ms)
+                .scale(begin: const Offset(0.8, 0.8)),
         ],
       ),
-    );
+    )
+    // 🔥 Animate entire message entry (main effect)
+        .animate()
+        .fadeIn(duration: 300.ms)
+        .slideY(begin: 0.15, curve: Curves.easeOut);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Auto-scroll for new messages incoming
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Only auto-scroll if we are already near the bottom OR if it's the very first load
+      if (isNearBottom && !isTyping) {
+        // Use a slight delay or ensure layout is done
+        if (scrollController.hasClients) {
+          scrollController.jumpTo(scrollController.position.maxScrollExtent);
+        }
+      }
+    });
+
     final selectedModel = ref.watch(selectedModelProvider);
     final messages = ref.watch(chatProvider);
     final themeColor = _getModelColor(selectedModel);
